@@ -1,6 +1,6 @@
 # ManyPrimates 2 - delay of gratification
 
-> Project to assess primates' ability to resist the temptation of an immediate reward in order to receive a larger or better reward later on
+Project to assess primates' ability to resist the temptation of an immediate reward in order to receive a larger or better reward later on
 
 ## Structure (to be)
 
