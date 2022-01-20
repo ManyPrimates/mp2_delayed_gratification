@@ -21,10 +21,12 @@ d_basel <- gsheet2tbl("https://docs.google.com/spreadsheets/d/11YXoMOuGhCRs67gZO
 d_basel_sum <- d_basel%>%
   filter(phase == "test",
          exchange_results == "Yes")%>%
-  group_by(species, subject, delay)%>%
+  group_by(species, subject, delay,exchange_time)%>%
   summarise(n = n())%>%
   group_by(species, subject)%>%
-  filter(delay == max(delay))
+  summarise(delay = max(delay),
+         exchange = max(exchange_time))%>%
+  mutate(exchange = as.numeric(exchange))
 ```
 
 ```{r}
@@ -33,17 +35,29 @@ d_basel_sum%>%
   geom_bar(stat = "identity")+
   facet_grid(~species, scales = "free_x",  space = "free")+
   theme_minimal()+
+  labs(y = "max delay")+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
 ```{r}
 d_basel_sum%>%
-  ggplot(aes(x = subject, y = delay, col = species))+
-  geom_point(aes(size = n))+
+  pivot_longer(cols = c("delay", "exchange"), names_to = "type", values_to = "time")%>%
+  ggplot(aes(x = subject, y = time, col = species, pch = type))+
+  geom_point(position = position_dodge(width = .9))+
   facet_grid(~species, scales = "free_x",  space = "free")+
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
+
+```{r}
+d_basel_sum%>%
+  ggplot(aes(x = delay, y = exchange, col = species))+
+  geom_jitter()+
+  labs(x = "max delay", y = "actual exchange time")+
+  geom_smooth(aes(x = delay, y = exchange),inherit.aes = F, method = "lm")+
+  theme_minimal()
+```
+
 
 
 ```{r}
