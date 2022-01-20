@@ -1,0 +1,141 @@
+---
+title: "Data exploration"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(gsheet)
+library(tidyverse)
+library(brms)
+library(tidybayes)
+
+```
+
+# Explore Basel data
+
+```{r}
+d_basel <- gsheet2tbl("https://docs.google.com/spreadsheets/d/11YXoMOuGhCRs67gZOph7UPF6gBxu6gaD/edit#gid=1163959621")
+```
+```{r}
+d_basel_sum <- d_basel%>%
+  filter(phase == "test",
+         exchange_results == "Yes")%>%
+  group_by(species, subject, delay)%>%
+  summarise(n = n())%>%
+  group_by(species, subject)%>%
+  filter(delay == max(delay))
+```
+
+```{r}
+d_basel_sum%>%
+  ggplot(aes(x = subject, y = delay, fill = species))+
+  geom_bar(stat = "identity")+
+  facet_grid(~species, scales = "free_x",  space = "free")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+```{r}
+d_basel_sum%>%
+  ggplot(aes(x = subject, y = delay, col = species))+
+  geom_point(aes(size = n))+
+  facet_grid(~species, scales = "free_x",  space = "free")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+```{r}
+d_mean_delay <- d_basel%>%
+  filter(phase == "test",
+         exchange_results == "Yes")%>%
+  group_by(species, subject, `previous_dog _testing`, age,sex)%>%
+  summarise(mean_delay = mean(delay))
+
+mean_delay_model <- brm(mean_delay ~ age + sex + (1|species), 
+                        data = d_mean_delay,
+                       family = skew_normal(), 
+                      chains = 3,
+                      iter= 2000,
+                      cores= 3)
+
+
+summary(mean_delay_model)
+
+pp_check(mean_delay_model)
+  
+```
+
+```{r}
+mean_delay_model %>%
+  spread_draws(b_Intercept, r_species[species,])%>% 
+  # add the grand mean to the group-specific deviations
+  mutate(mu = b_Intercept + r_species) %>%
+  ungroup()%>%
+# plot
+  ggplot(aes(x = mu, y = reorder(species, mu))) +
+  geom_vline(xintercept = fixef(mean_delay_model)[1, 1], color = "#839496", size = 1) +
+  geom_vline(xintercept = fixef(mean_delay_model)[1, 3:4], color = "#839496", linetype = 2) +
+  stat_halfeye(.width = .5, size = 2/3, fill = "#859900", alpha = .75) +
+  labs(x ="mean delay",
+       y = "Species") +
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0)) 
+```
+
+
+```{r}
+d_max_delay <- d_basel%>%
+  filter(phase == "test",
+         exchange_results == "Yes")%>%
+  group_by(species, subject, `previous_dog _testing`, age,sex, delay)%>%
+  summarise(n = n())%>%
+  group_by(species, subject)%>%
+  filter(delay == max(delay))%>%
+  ungroup()%>%
+  mutate(age = scale(age))
+
+
+max_delay_model <- brm(delay ~ age + sex + (1|species), 
+                        data = d_max_delay,
+                       family = skew_normal(), 
+                      chains = 3,
+                      iter= 4000,
+                      cores= 3,
+                      control = list(adapt_delta = 0.95))
+
+
+summary(max_delay_model)
+
+pp_check(max_delay_model,nsamples = 100)
+
+pairs(max_delay_model)
+
+plot(max_delay_model)
+
+plot(loo(max_delay_model, cores = getOption("mc.cores", 1)))
+
+pp_check(max_delay_model, type = "scatter_avg_grouped", group = "species")
+```
+
+```{r}
+max_delay_model %>%
+  spread_draws(b_Intercept, r_species[species,])%>% 
+  # add the grand mean to the group-specific deviations
+  mutate(mu = b_Intercept + r_species) %>%
+  ungroup()%>%
+# plot
+  ggplot(aes(x = mu, y = reorder(species, mu))) +
+  geom_vline(xintercept = fixef(max_delay_model)[1, 1], color = "#839496", size = 1) +
+  geom_vline(xintercept = fixef(max_delay_model)[1, 3:4], color = "#839496", linetype = 2) +
+  stat_halfeye(.width = .5, size = 2/3, fill = "#859900", alpha = .75) +
+  labs(x ="max delay",
+       y = "Species") +
+  theme(panel.grid   = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y  = element_text(hjust = 0)) 
+
+```
+
